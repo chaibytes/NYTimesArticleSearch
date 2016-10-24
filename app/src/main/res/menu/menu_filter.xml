@@ -1,0 +1,11 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context="com.chaibytes.newyorktimessearch.activities.SearchActivity">
+    <item
+        android:id="@+id/miFilter"
+        android:icon="@android:drawable/ic_menu_sort_by_size"
+        app:showAsAction="ifRoom"
+        android:title="@string/filter">
+    </item>
+</menu>

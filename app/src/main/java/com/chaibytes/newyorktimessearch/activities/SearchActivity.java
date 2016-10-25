@@ -2,6 +2,8 @@ package com.chaibytes.newyorktimessearch.activities;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.text.TextUtils;
@@ -14,7 +16,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.GridView;
 
-import com.chaibytes.newyorktimessearch.ArticleArrayAdapter;
+import com.chaibytes.newyorktimessearch.adapter.ArticleArrayAdapter;
 import com.chaibytes.newyorktimessearch.R;
 import com.chaibytes.newyorktimessearch.model.Article;
 import com.chaibytes.newyorktimessearch.model.Settings;
@@ -45,8 +47,13 @@ public class SearchActivity extends AppCompatActivity {
     ArrayList<Article> articles;
     ArticleArrayAdapter adapter;
 
+    Handler handler = new Handler();
+    EndlessScrollListener scrollListener;
+
+    public static final int CAPACITY = 30;
+
     public SearchActivity() {
-        settings = null;
+        settings = new Settings();
     }
 
     @Override
@@ -55,12 +62,26 @@ public class SearchActivity extends AppCompatActivity {
         setContentView(R.layout.activity_search);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+
+        gvResults = (GridView) findViewById(R.id.gvResults);
+        // Attach the listener to the AdapterView oncreate
+        scrollListener = new EndlessScrollListener() {
+            @Override
+            public boolean onLoadMore(int page, int totalItemsCount) {
+                // Triggered only when new data needs to be appended to the list
+                Log.d("DEBUG", String.valueOf(page));
+                loadNextDataFromApi(page);
+                return true;
+            }
+        };
+        gvResults.setOnScrollListener(scrollListener);
         setupViews();
+        // Fire the basic search query initially.
+        onArticlesFetch(0);
     }
 
     public void setupViews() {
         etQuery = (EditText) findViewById(R.id.etQuery);
-        gvResults = (GridView) findViewById(R.id.gvResults);
         btnSearch = (Button) findViewById(R.id.btnSearch);
         articles = new ArrayList<>();
         adapter = new ArticleArrayAdapter(this, articles);
@@ -82,19 +103,6 @@ public class SearchActivity extends AppCompatActivity {
             }
         });
 
-        // Attach the listener to the AdapterView oncreate
-        gvResults.setOnScrollListener(new EndlessScrollListener() {
-            @Override
-            public boolean onLoadMore(int page, int totalItemsCount) {
-                // Triggered only when new data needs to be appended to the list
-                loadNextDataFromApi(page);
-                return true;
-            }
-        });
-
-        if (settings == null) {
-            settings = new Settings(Calendar.getInstance(), "Oldest", false, false, false);
-        }
     }
 
     @Override
@@ -123,11 +131,12 @@ public class SearchActivity extends AppCompatActivity {
     }
 
     public void onArticleSearch(View view) {
-        adapter.clear();
+        articles.clear();
         adapter.notifyDataSetChanged();
         onArticlesFetch(0);
     }
-    public void onArticlesFetch(int page) {
+
+    public void onArticlesFetch(final int page) {
         String query = etQuery.getText().toString();
         String url = "http://api.nytimes.com/svc/search/v2/articlesearch.json";
         AsyncHttpClient client = new AsyncHttpClient();
@@ -137,8 +146,13 @@ public class SearchActivity extends AppCompatActivity {
         if (!TextUtils.isEmpty(query)) {
             params.put("q", query);
         }
-        params.put("begin_date", getDateString(settings.getCalendar()));
-        params.put("sort", settings.getOption().toLowerCase());
+        if (settings != null && settings.getCalendar() != null) {
+            params.put("begin_date", getDateString(settings.getCalendar()));
+        }
+        if (settings != null && settings.getOption() != null) {
+            params.put("sort", settings.getOption().toLowerCase());
+        }
+
         String newsQuery = createFlattenedList();
         if (!TextUtils.isEmpty(newsQuery)) {
             params.put("fq", "news_desk:(" + newsQuery +")");
@@ -147,27 +161,43 @@ public class SearchActivity extends AppCompatActivity {
         client.get(url, params, new JsonHttpResponseHandler() {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-                super.onSuccess(statusCode, headers, response);
                 JSONArray articleJSONResults = null;
 
                 try {
                     articleJSONResults = response.getJSONObject("response").getJSONArray("docs");
-                    articles.addAll(Article.fromJSONArray(articleJSONResults));
-                    adapter.notifyDataSetChanged();
-//                    adapter.clear();
-//                    adapter.addAll(Article.fromJSONArray(articleJSONResults));
+                    if (articleJSONResults.length() == 0) {
+                        scrollListener.limitReached();
+                        Log.d("DEBUG", "Limit Reached");
+                    } else {
+                        articles.addAll(Article.fromJSONArray(articleJSONResults));
+                        adapter.notifyDataSetChanged();
+                        scrollListener.onLoadFinish(page, adapter.getCount());
+
+                        if (adapter.getCount() <= CAPACITY) {
+                            handler.postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    onArticlesFetch(page + 1);
+                                }
+                            }, 2500L);
+
+                        }
+                    }
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
             }
 
             @Override
-            public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONArray errorResponse) {
+            public void onFailure(int statusCode, Header[] headers, Throwable throwable, JSONObject errorResponse) {
+                // This gives a failure on loading
+                scrollListener.onFailure();
                 Log.d("Error", errorResponse.toString());
             }
         });
     }
 
+    @NonNull
     private String createFlattenedList() {
         String list = "";
         if (settings.isArtChecked()) {
@@ -194,7 +224,6 @@ public class SearchActivity extends AppCompatActivity {
         if (resultCode == RESULT_OK && requestCode == REQUEST_CODE) {
             settings = data.getParcelableExtra("settings");
         }
-        adapter.clear();
     }
 
     private String getDateString(Calendar cal) {

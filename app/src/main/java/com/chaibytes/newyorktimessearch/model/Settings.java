@@ -58,13 +58,7 @@ public class Settings implements Parcelable {
     boolean isFashionChecked;
     boolean isSportsChecked;
 
-    public Settings(Calendar calendar, String option,
-             boolean isArtChecked, boolean isFashionChecked, boolean isSportsChecked) {
-        this.calendar = calendar;
-        this.option = option;
-        this.isArtChecked = isArtChecked;
-        this.isFashionChecked = isFashionChecked;
-        this.isSportsChecked = isSportsChecked;
+    public Settings() {
     }
 
     @Override

@@ -1,27 +1,28 @@
 package com.chaibytes.newyorktimessearch.utils;
 
 import android.widget.AbsListView;
-import android.widget.GridView;
 
 /**
  * Created by pdebadarshini on 10/24/16.
  */
 
-public abstract class EndlessScrollListener implements GridView.OnScrollListener {
+public abstract class EndlessScrollListener implements AbsListView.OnScrollListener {
     // The minimum number of items to have below your current scroll position
-    // before loading more
+    // before loading more.
     private int visibleThreshold = 5;
     // The current offset index of data you have loaded
     private int currentPage = 0;
     // The total number of items in the dataset after the last load
     private int previousTotalItemCount = 0;
-    // True if we are still waiting for the last set of data to load
+    // True if we are still waiting for the last set of data to load.
     private boolean loading = true;
     // Sets the starting page index
     private int startingPageIndex = 0;
 
-    public EndlessScrollListener() {
+    // Limit has been reached
+    private boolean limitReached = false;
 
+    public EndlessScrollListener() {
     }
 
     public EndlessScrollListener(int visibleThreshold) {
@@ -34,36 +35,37 @@ public abstract class EndlessScrollListener implements GridView.OnScrollListener
         this.currentPage = startPage;
     }
 
-    // This happens many time during a scroll.
-    // We can load more data but only after checking if the previous
-    // load if finished
+    // This happens many times a second during a scroll, so be wary of the code you place here.
+    // We are given a few useful parameters to help us work out if we need to load some more data,
+    // but first we check if we are waiting for the previous load to finish.
     @Override
-    public void onScroll(AbsListView absListView, int firstVisibleItem,
-                         int visibleItemCount, int totalItemCount) {
-        // If the total item count is zero and the previous isin't,
-        // assume the list is invalidated and should be reset back to initial state
+    public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
+        // If the total item count is zero and the previous isn't, assume the
+        // list is invalidated and should be reset back to initial state
         if (totalItemCount < previousTotalItemCount) {
             this.currentPage = this.startingPageIndex;
             this.previousTotalItemCount = totalItemCount;
-            if (totalItemCount == 0) {this.loading = true;}
+            if (totalItemCount == 0) {
+                this.loading = true;
+            }
         }
-
-        // If its still loading, we check to see if the dataset count has changed,
-        // if so we conclude it has finished loading and update the current page
-        // number and total item count
+        // If it's still loading, we check to see if the dataset count has
+        // changed, if so we conclude it has finished loading and update the current page
+        // number and total item count.
         if (loading && (totalItemCount > previousTotalItemCount)) {
             loading = false;
             previousTotalItemCount = totalItemCount;
             currentPage++;
         }
 
-        // If it isin't currently loading, we check to see if we have breached
+        // If it isn't currently loading, we check to see if we have breached
         // the visibleThreshold and need to reload more data.
-        // If we do need to reload some more data, we execute onLoadMore to fetch more data
+        // If we do need to reload some more data, we execute onLoadMore to fetch the data.
         if (!loading && (firstVisibleItem + visibleItemCount + visibleThreshold) >= totalItemCount) {
-            loading = onLoadMore(currentPage + 1, totalItemCount);
+            if (!limitReached) {
+                loading = onLoadMore(currentPage + 1, totalItemCount);
+            }
         }
-
     }
 
     // Defines the process for actually loading more data based on page
@@ -71,7 +73,26 @@ public abstract class EndlessScrollListener implements GridView.OnScrollListener
     public abstract boolean onLoadMore(int page, int totalItemsCount);
 
     @Override
-    public void onScrollStateChanged(AbsListView absListView, int i) {
+    public void onScrollStateChanged(AbsListView view, int scrollState) {
         // Don't take any action on changed
     }
+
+    public void onLoadFinish(int page, int totalItemsCount) {
+        loading = false;
+        // size of the adapter
+        previousTotalItemCount = totalItemsCount;
+        currentPage = page;
+    }
+
+    // Stop the loading
+    public void onFailure() {
+        loading = false;
+    }
+
+    // No result returned need to stop the API
+    public void limitReached() {
+        limitReached = true;
+        loading = false;
+    }
+
 }

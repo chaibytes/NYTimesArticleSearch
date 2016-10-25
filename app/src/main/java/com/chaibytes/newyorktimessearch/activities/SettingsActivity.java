@@ -17,6 +17,7 @@ import android.widget.Spinner;
 import android.widget.SpinnerAdapter;
 
 import com.chaibytes.newyorktimessearch.R;
+import com.chaibytes.newyorktimessearch.fragment.DatePickerFragment;
 import com.chaibytes.newyorktimessearch.model.Settings;
 
 import java.text.SimpleDateFormat;
@@ -54,7 +55,12 @@ public class SettingsActivity extends AppCompatActivity implements DatePickerDia
     }
 
     private void setViewItems() {
-        String date = getDateString(settings.getCalendar());
+        String date = "";
+        if (settings != null && settings.getCalendar() != null) {
+            date = getDateString(settings.getCalendar());
+        } else {
+            date = getDateString(Calendar.getInstance());
+        }
         etBeginDate.setText(date);
 
         int index = 0;
@@ -103,7 +109,6 @@ public class SettingsActivity extends AppCompatActivity implements DatePickerDia
 
     };
     private void getViewItems() {
-        settings = new Settings(c, null, false, false, false);
         etBeginDate.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
